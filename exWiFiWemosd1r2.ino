@@ -12,13 +12,60 @@ String estadoU = "NOK";
 
 void setup() {
   // put your setup code here, to run once:
-  WiFi.mode(WIFI_AP);
-  //WiFi.softAP("MOVISTAR_47E8","ndfBakCEvtHwj8jSSEMJ");
-  // WiFi.softAP("WLAN_BC00","693e0a0635eff7934b87");
-  WiFi.softAP("Hello_IoT", "12345678");
-  server.begin();
   Serial.begin(115200);
-  IPAddress http_server_ip = WiFi.softAPIP();
+
+  delay(100);
+
+  Serial.println("\r\n");
+  Serial.print("Chip ID: 0x");
+  Serial.println(ESP.getChipId(), HEX);
+  
+  WiFi.mode(WIFI_STA);
+  //WiFi.softAP("MOVISTAR_47E8","ndfBakCEvtHwj8jSSEMJ");
+  // WiFi.softAP("Wireless-N","z123456z");
+  //WiFi.softAP("Hello_IoT", "12345678");
+  // WiFi.softAP("AI-THINKER_C0E300");
+  WiFi.begin("Wireless-N", "z123456z");
+  WiFi.config(IPAddress(192, 168, 1, 50), IPAddress(192, 168, 1, 1), IPAddress(255, 255, 255, 0));
+
+
+
+  unsigned long startTime = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - startTime < 10000)  //10 segundos
+  {
+    Serial.write('.');
+    //Serial.print(WiFi.status());
+    delay(500);
+  }
+  Serial.println();
+
+  // Check connection
+  if (WiFi.status() == WL_CONNECTED)
+  {
+    // ... print IP Address
+    Serial.print("IP address STATION: ");
+    Serial.println(WiFi.localIP());
+  }
+  else
+  {
+    Serial.println("Can not connect to WiFi station. Go into AP mode.");
+
+    // Go into software AP mode.
+    WiFi.mode(WIFI_AP);
+
+    delay(10);
+
+    WiFi.softAP("AI-THINKER_C0E300");
+
+    Serial.print("IP address Access Point: ");
+    Serial.println(WiFi.softAPIP());
+  }
+
+
+  IPAddress http_server_ip = WiFi.localIP();
+
+  server.begin();
+
   Serial.print("nuestra server IP:");
   Serial.print(http_server_ip);
   Serial.print("\r\n");
@@ -47,7 +94,7 @@ void loop() {
           client.println("Connection: close");
           client.println();  */
         if (req.indexOf("corriente") > 0) {
-          
+
           buf += "{\"Corriente\":{\"Valor\":";
           buf += "\"";
           buf += String(fValorI);
@@ -57,11 +104,11 @@ void loop() {
           buf += String(estadoI);
           buf += "\"";
           buf += "}}";
-         
+
           Serial.print("buf Corriente\r\n");
         }
         else if (req.indexOf("voltaj") > 0) {
-          
+
           buf += "{\"Tension\":{\"Valor\":";
           buf += "\"";
           buf += String(fValorU);
@@ -71,27 +118,27 @@ void loop() {
           buf += String(estadoU);
           buf += "\"";
           buf += "}}";
-          
+
           Serial.print("buf Tension\r\n");
         }
 
-    }//if (req.indexOf("/MonitorEnergia"))
+      }//if (req.indexOf("/MonitorEnergia"))
 
-    Serial.print(cabecJSON);
-    Serial.print(buf);
-    Serial.print("\r\n");
+      Serial.print(cabecJSON);
+      Serial.print(buf);
+      Serial.print("\r\n");
 
-    client.println(cabecJSON);
-    client.println(buf);
-    buf = "";
-    break;
+      client.println(cabecJSON);
+      client.println(buf);
+      buf = "";
+      break;
+    }
+    delay(1);
+
+    client.stop();
+    Serial.print("client disconnected\r\n");
+
   }
-  delay(1);
-
-  client.stop();
-  Serial.print("client disconnected\r\n");
-
-}
 
 
 
