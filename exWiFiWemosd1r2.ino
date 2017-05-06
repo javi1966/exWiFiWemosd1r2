@@ -4,7 +4,6 @@
 
 #define  LED  5  //D1 es GPIO5
 
-
 MCP3002 adc(SS);
 
 
@@ -20,7 +19,7 @@ float fValorU = 225.6;
 String estadoU = "NOK";
 
 bool bActualiza = true;
-const int timerUpdate = 1; //1/2 minuto
+const int timerUpdate = 30; //1/2 minuto
 String writeAPIKey = "F81DR9CCLURUGK87";
 const char* host = "api.thingspeak.com";
 int valor;
@@ -85,40 +84,8 @@ void setup() {
     Serial.println(WiFi.softAPIP());
   }
 
-  
-  valor = adc.analogRead(0);
-  Serial.println(String(valor));
-  amp = (15.5 * (valor - 512) / 355); // 355 valor adc 867 - valor vcc/2 512
 
 
-  digitalWrite(LED, HIGH); //flashing led
-  delay(500);
-  digitalWrite(LED, LOW);
-
-  if (client.connect(host, 80)) {
-
-    // Construct API request body
-    String body = "field1=";
-    body +=  String(amp);
-    body += "&field2=";
-    body += String(tension);
-
-    Serial.println(body);
-
-    client.print("POST /update HTTP/1.1\n");
-    client.print("Host: api.thingspeak.com\n");
-    client.print("Connection: close\n");
-    client.print("X-THINGSPEAKAPIKEY: " + writeAPIKey + "\n");
-    client.print("Content-Type: application/x-www-form-urlencoded\n");
-    client.print("Content-Length: ");
-    client.print(body.length());
-    client.print("\n\n");
-    client.print(body);
-    client.print("\n\n");
-
-  }
-
-  client.stop();
 
   IPAddress http_server_ip = WiFi.localIP();
 
@@ -127,6 +94,7 @@ void setup() {
   Serial.print("nuestra server IP:");
   Serial.print(http_server_ip);
   Serial.print("\r\n");
+
 
   noInterrupts();
   timer0_isr_init();
@@ -140,7 +108,7 @@ void setup() {
 void loop() {
   // put your main code here, to run repeatedly:
   char temp[10];
-  
+
 
   if (bActualiza) {
 
