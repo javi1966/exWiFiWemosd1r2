@@ -16,15 +16,70 @@ String cabecJSON = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnect
 float fValorI = 5.2;
 String estadoI = "OK";
 float fValorU = 225.6;
-String estadoU = "NOK";
+String estadoU; //pendiente 
 
 bool bActualiza = true;
 const int timerUpdate = 30; //1/2 minuto
 String writeAPIKey = "F81DR9CCLURUGK87";
 const char* host = "api.thingspeak.com";
-int valor;
+
 float amp;
-float tension = 224;
+float tension;
+
+void lecturaValores(){
+
+  int valor;
+
+  valor = adc.analogRead(0);
+  Serial.print("Corriente: ");
+  Serial.println(String(valor));
+  amp = (15.5 * (valor - 508) / 233); // 355 valor adc 867 - valor vcc/2 512
+  
+  if(  valor > 755)
+    estadoI="NOK";
+  else
+    estadoI="OK";  
+
+  valor = adc.analogRead(1);
+  Serial.print("Tension: ");
+  Serial.println(String(valor));
+
+  if( valor < 870 || valor > 891)
+    estadoU="NOK";
+  else
+    estadoU="OK";  
+
+  tension = (241.0 * (valor - 511) / 378);
+
+  if (client.connect(host, 80)) {
+
+    // Construct API request body
+    String body = "field1=";
+    body +=  String(amp);
+    body += "&field2=";
+    body += String(tension);
+
+
+
+
+    Serial.println(body);
+
+    client.print("POST /update HTTP/1.1\n");
+    client.print("Host: api.thingspeak.com\n");
+    client.print("Connection: close\n");
+    client.print("X-THINGSPEAKAPIKEY: " + writeAPIKey + "\n");
+    client.print("Content-Type: application/x-www-form-urlencoded\n");
+    client.print("Content-Length: ");
+    client.print(body.length());
+    client.print("\n\n");
+    client.print(body);
+    client.print("\n\n");
+
+  }
+
+  client.stop();
+
+}
 
 void setup() {
   // put your setup code here, to run once:
@@ -52,13 +107,23 @@ void setup() {
   WiFi.config(IPAddress(192, 168, 1, 50), IPAddress(192, 168, 1, 1), IPAddress(255, 255, 255, 0));
 
 
-
+  int timeout = 0;
   unsigned long startTime = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - startTime < 10000)  //10 segundos
   {
     Serial.write('.');
     //Serial.print(WiFi.status());
     delay(500);
+    if (++timeout > 100)
+    {
+      Serial.println("Sin Conexion WIFI");
+      while (1) {
+        digitalWrite(LED, HIGH);
+        delay(100);
+        digitalWrite(LED, LOW);
+        delay(100);
+      }
+    }
   }
   Serial.println();
 
@@ -102,8 +167,12 @@ void setup() {
   timer0_write(ESP.getCycleCount() + 80000000L); // 80MHz == 1sec
   interrupts();
 
+  
+//primera lectura
+  lecturaValores();
 
 }
+
 
 void loop() {
   // put your main code here, to run repeatedly:
@@ -112,41 +181,8 @@ void loop() {
 
   if (bActualiza) {
 
-    valor = adc.analogRead(0);
-    Serial.println(String(valor));
-    amp = (15.5 * (valor - 508) / 233); // 355 valor adc 867 - valor vcc/2 512
-    /*
-      sprintf(temp, "%2f", amp);
-      Serial.println(String(V));
-
-    */
-    if (client.connect(host, 80)) {
-
-      // Construct API request body
-      String body = "field1=";
-      body +=  String(amp);
-      body += "&field2=";
-      body += String(tension);
-
-
-
-
-      Serial.println(body);
-
-      client.print("POST /update HTTP/1.1\n");
-      client.print("Host: api.thingspeak.com\n");
-      client.print("Connection: close\n");
-      client.print("X-THINGSPEAKAPIKEY: " + writeAPIKey + "\n");
-      client.print("Content-Type: application/x-www-form-urlencoded\n");
-      client.print("Content-Length: ");
-      client.print(body.length());
-      client.print("\n\n");
-      client.print(body);
-      client.print("\n\n");
-
-    }
-
-    client.stop();
+    lecturaValores();
+  
 
     digitalWrite(LED, HIGH); //flashing led
     delay(500);
@@ -161,7 +197,7 @@ void loop() {
 
   if (client) {
     Serial.print("NUEVO CLIENTE\r\n");
-
+    lecturaValores();
     while (client.connected()) {
 
       String req = client.readStringUntil('\r');
@@ -214,7 +250,7 @@ void loop() {
       buf = "";
       break;
     }
-    delay(1);
+    delay(100);
 
     client.stop();
     Serial.print("client disconnected\r\n");
