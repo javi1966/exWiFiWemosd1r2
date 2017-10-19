@@ -19,7 +19,7 @@ float fValorU = 225.6;
 String estadoU; //pendiente 
 
 bool bActualiza = true;
-const int timerUpdate = 30; //1/2 minuto
+const int timerUpdate = 60 * 2 ; //2 minutos
 String writeAPIKey = "F81DR9CCLURUGK87";
 const char* host = "api.thingspeak.com";
 
@@ -103,15 +103,16 @@ void setup() {
   // WiFi.softAP("Wireless-N","z123456z");
   //WiFi.softAP("Hello_IoT", "12345678");
   // WiFi.softAP("AI-THINKER_C0E300");
-  WiFi.begin("Wireless-N", "z123456z");
+  //WiFi.begin("Wireless-N", "z123456z");
+  WiFi.begin("WLAN_BF", "Z404A03CF9CBF");
   WiFi.config(IPAddress(192, 168, 1, 50), IPAddress(192, 168, 1, 1), IPAddress(255, 255, 255, 0));
 
 
   int timeout = 0;
-  unsigned long startTime = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - startTime < 10000)  //10 segundos
+  //unsigned long startTime = millis();
+  while (WiFi.status() != WL_CONNECTED) // && millis() - startTime < 10000)  //10 segundos
   {
-    Serial.write('.');
+    Serial.write('*');
     //Serial.print(WiFi.status());
     delay(500);
     if (++timeout > 100)
@@ -125,9 +126,11 @@ void setup() {
       }
     }
   }
+  
   Serial.println();
 
   // Check connection
+  /*
   if (WiFi.status() == WL_CONNECTED)
   {
     // ... print IP Address
@@ -148,7 +151,7 @@ void setup() {
     Serial.print("IP address Access Point: ");
     Serial.println(WiFi.softAPIP());
   }
-
+  */
 
 
 
