@@ -1,4 +1,5 @@
 #include <ESP8266WiFi.h>
+#include <ESP8266HTTPClient.h>
 #include <SPI.h>
 #include "MCP3002.h"
 
@@ -7,7 +8,7 @@
 MCP3002 adc(SS);
 
 
-WiFiServer server(80);
+
 WiFiClient client;
 
 //char buf[100];
@@ -19,21 +20,75 @@ float fValorU = 225.6;
 String estadoU; //pendiente 
 
 bool bActualiza = true;
-const int timerUpdate = 60 * 2 ; //2 minutos
-String writeAPIKey = "F81DR9CCLURUGK87";
+const int timerUpdate = 15;//60 * 2 ; //2 minutos
+String writeAPIKey = "U8CFXKG9VLCAE1TD";
 const char* host = "api.thingspeak.com";
 
 float amp;
 float tension;
+//******************************************************************************************************************
+double offsetI;
+double filteredI;
+double sqI,sumI;
+int16_t sampleI;
+double Irms;
+
+double squareRoot(double fg)  
+{
+  double n = fg / 2.0;
+  double lstX = 0.0;
+  while (n != lstX)
+  {
+    lstX = n;
+    n = (n + fg / n) / 2.0;
+  }
+  return n;
+}
+
+double calcIrms(unsigned int Number_of_Samples)
+{
+  /* Be sure to update this value based on the IC and the gain settings! */
+  float multiplier = 0.039F;    /* ADS1115 @ +/- 4.096V gain (16-bit results) */
+  for (unsigned int n = 0; n < Number_of_Samples; n++)
+  {
+    sampleI = adc.analogRead(0);//ads.readADC_Differential_0_1();
+
+    // Digital low pass filter extracts the 2.5 V or 1.65 V dc offset, 
+  //  then subtract this - signal is now centered on 0 counts.
+    offsetI = (offsetI + (sampleI-offsetI)/1024);
+    filteredI = sampleI - offsetI;
+    //filteredI = sampleI * multiplier;
+
+    // Root-mean-square method current
+    // 1) square current values
+    sqI = filteredI * filteredI;
+    // 2) sum 
+    sumI += sqI;
+  }
+  
+  Irms = squareRoot(sumI / Number_of_Samples)*multiplier; 
+
+  //Reset accumulators
+  sumI = 0;
+    
+ 
+  return Irms;
+}
+
+//*******************************************************************************************************************
 
 void lecturaValores(){
 
   int valor;
 
-  valor = adc.analogRead(0);
+  //valor = adc.analogRead(0);
   Serial.print("Corriente: ");
-  Serial.println(String(valor));
-  amp = (15.5 * (valor - 508) / 233); // 355 valor adc 867 - valor vcc/2 512
+  //Serial.println(String(valor));
+  //amp = (15.5 * (valor - 508) / 233); // 355 valor adc 867 - valor vcc/2 512
+
+  double corriente = calcIrms(2048);
+  Serial.println(String(corriente));
+
   
   if(  valor > 755)
     estadoI="NOK";
@@ -49,35 +104,35 @@ void lecturaValores(){
   else
     estadoU="OK";  
 
-  tension = (241.0 * (valor - 511) / 378);
+  tension = (245.0 * (valor - 511) / 388);
 
-  if (client.connect(host, 80)) {
+  if (WiFi.status() == WL_CONNECTED) {
 
-    // Construct API request body
-    String body = "field1=";
-    body +=  String(amp);
-    body += "&field2=";
-    body += String(tension);
+      HTTPClient http;
+      
+      String body = "field1=";
+      body +=  String(corriente);
+      body += "&field2=";
+      body +=  String(tension);
+
+      Serial.println(body);
+      
+      http.begin(host, 80,"https://api.thingspeak.com/update?api_key="+writeAPIKey+"&"+body);
+
+       int httpCode = http.GET();
+
+       if (httpCode == HTTP_CODE_OK) {
 
 
+          //String payload = http.getString();
 
+         Serial.print("Resultado: ");
+         Serial.println(http.getString());
 
-    Serial.println(body);
+       }   
 
-    client.print("POST /update HTTP/1.1\n");
-    client.print("Host: api.thingspeak.com\n");
-    client.print("Connection: close\n");
-    client.print("X-THINGSPEAKAPIKEY: " + writeAPIKey + "\n");
-    client.print("Content-Type: application/x-www-form-urlencoded\n");
-    client.print("Content-Length: ");
-    client.print(body.length());
-    client.print("\n\n");
-    client.print(body);
-    client.print("\n\n");
-
-  }
-
-  client.stop();
+        http.end();
+     }//WL_CONNECTED
 
 }
 
@@ -98,16 +153,10 @@ void setup() {
   Serial.print("Chip ID: 0x");
   Serial.println(ESP.getChipId(), HEX);
 
-  WiFi.mode(WIFI_STA);
-  //WiFi.softAP("MOVISTAR_47E8","ndfBakCEvtHwj8jSSEMJ");
-  // WiFi.softAP("Wireless-N","z123456z");
-  //WiFi.softAP("Hello_IoT", "12345678");
-  // WiFi.softAP("AI-THINKER_C0E300");
-  //WiFi.begin("Wireless-N", "z123456z");
-  WiFi.begin("WLAN_BF", "Z404A03CF9CBF");
-  WiFi.config(IPAddress(192, 168, 1, 50), IPAddress(192, 168, 1, 1), IPAddress(255, 255, 255, 0));
-
-
+ 
+ // WiFi.begin("Wireless-N", "z123456z");
+  WiFi.begin("MOVISTAR_B855", "AD2890A7F423CBF3BB79");
+  
   int timeout = 0;
   //unsigned long startTime = millis();
   while (WiFi.status() != WL_CONNECTED) // && millis() - startTime < 10000)  //10 segundos
@@ -129,51 +178,19 @@ void setup() {
   
   Serial.println();
 
-  // Check connection
-  /*
-  if (WiFi.status() == WL_CONNECTED)
-  {
-    // ... print IP Address
-    Serial.print("IP address STATION: ");
-    Serial.println(WiFi.localIP());
-  }
-  else
-  {
-    Serial.println("Can not connect to WiFi station. Go into AP mode.");
 
-    // Go into software AP mode.
-    WiFi.mode(WIFI_AP);
-
-    delay(10);
-
-    WiFi.softAP("AI-THINKER_C0E300");
-
-    Serial.print("IP address Access Point: ");
-    Serial.println(WiFi.softAPIP());
-  }
-  */
-
-
-
-  IPAddress http_server_ip = WiFi.localIP();
-
-  server.begin();
-
-  Serial.print("nuestra server IP:");
-  Serial.print(http_server_ip);
-  Serial.print("\r\n");
-
+  Serial.println(WiFi.localIP());
+  Serial.printf("Chip ID = %08X", ESP.getChipId());
+  Serial.println("");
 
   noInterrupts();
   timer0_isr_init();
   timer0_attachInterrupt(TimingISR);
   timer0_write(ESP.getCycleCount() + 80000000L); // 80MHz == 1sec
   interrupts();
+ 
 
-  
-//primera lectura
-  lecturaValores();
-
+  delay(2000);
 }
 
 
@@ -195,70 +212,7 @@ void loop() {
 
   }
 
-
-  WiFiClient client = server.available();
-
-  if (client) {
-    Serial.print("NUEVO CLIENTE\r\n");
-    lecturaValores();
-    while (client.connected()) {
-
-      String req = client.readStringUntil('\r');
-      Serial.print(req);
-      Serial.print("\r\n");
-
-      if (req.indexOf("MonitorEnergia") > 0)
-      {
-        /*client.println("HTTP/1.1 200 OK");
-          client.println("Content-Type: application/json");
-          client.println("Connection: close");
-          client.println();  */
-        if (req.indexOf("corriente") > 0) {
-
-          buf += "{\"Corriente\":{\"Valor\":";
-
-          buf += String(amp);
-
-          buf += ",\"status\":";
-          buf += "\"";
-          buf += String(estadoI);
-          buf += "\"";
-          buf += "}}";
-
-          Serial.print("buf Corriente\r\n");
-        }
-        else if (req.indexOf("voltaj") > 0) {
-
-          buf += "{\"Tension\":{\"Valor\":";
-
-          buf += String(tension);
-
-          buf += ",\"status\":";
-          buf += "\"";
-          buf += String(estadoU);
-          buf += "\"";
-          buf += "}}";
-
-          Serial.print("buf Tension\r\n");
-        }
-
-      }//if (req.indexOf("/MonitorEnergia"))
-
-      Serial.print(cabecJSON);
-      Serial.print(buf);
-      Serial.print("\r\n");
-
-      client.println(cabecJSON);
-      client.println(buf);
-      buf = "";
-      break;
-    }
-    delay(100);
-
-    client.stop();
-    Serial.print("client disconnected\r\n");
-
-  }
+  delay(20000); 
 
 }
 
